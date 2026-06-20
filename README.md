@@ -9,9 +9,10 @@
   <br />
   <img src="output%20image/image.png" alt="8-Bit CPU Lab Interface" width="900"/>
   <br />
-  <h2> recommendation used in 60% to 80% zoom</h2>
 
-  <p><em>Experience the Fetch-Decode-Execute cycle in real-time, right in your browser.</em></p>
+
+  <p><em>Experience the Fetch-Decode-Execute cycle in real-time, right in your browser
+     (recommendation used in 60% to 80% zoom).</em></p>
 </div>
 
 ---
