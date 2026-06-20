@@ -73,7 +73,6 @@ npm run serve
 Computer architecture from scratch/
 ├── 8bit-cpu-lab.html      # Main application (HTML + CSS + JS)
 ├── package.json           # npm scripts for testing & serving
-├── README.md              # Project documentation
 ├── output image/          # Application screenshots
 ├── tests/
 │   └── test-cpu.mjs       # Automated unit tests for CPU logic
