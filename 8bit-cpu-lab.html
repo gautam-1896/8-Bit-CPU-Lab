@@ -1,0 +1,2329 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>8-Bit CPU Lab</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --bg: #1e1e24;
+      --panel: #2b2b36;
+      --border: #3f3f4e;
+      --green: #4ade80;
+      --blue: #60a5fa;
+      --magenta: #f472b6;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --purple: #c084fc;
+      --dim: #9ca3af;
+      --mono: 'Share Tech Mono', monospace;
+      --display: 'Orbitron', sans-serif;
+      --sidebar-w: 260px;
+      --bottom-h: clamp(190px, 26vh, 260px);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    html,
+    body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--green);
+      font-family: var(--mono);
+      overflow: hidden
+    }
+
+    /* ═══ SCANLINES overlay ═══ */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.08) 2px, rgba(0, 0, 0, 0.08) 4px);
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      min-height: 0
+    }
+
+    /* ═══ HEADER ═══ */
+    header {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      background: rgba(0, 200, 255, 0.06);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+
+    header h1 {
+      font-family: var(--display);
+      font-size: .95rem;
+      color: var(--blue);
+      letter-spacing: 2px;
+      text-shadow: 0 0 18px var(--blue)
+    }
+
+    .header-badge {
+      font-size: .55rem;
+      background: var(--green);
+      color: #000;
+      padding: 2px 6px;
+      border-radius: 2px;
+      font-weight: 700;
+      letter-spacing: 1px
+    }
+
+    .clock-display {
+      margin-left: auto;
+      font-size: .7rem;
+      color: var(--amber);
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    .clock-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+
+      animation: blink 1s infinite
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: .2
+      }
+    }
+
+    /* ═══ MAIN LAYOUT ═══ */
+    .app {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr var(--sidebar-w);
+      grid-template-rows: 1fr var(--bottom-h);
+      gap: 16px;
+      padding: 16px;
+    }
+
+    /* ═══ PANELS ═══ */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(6px)
+    }
+
+    .panel-title {
+      font-family: var(--display);
+      font-size: .5rem;
+      letter-spacing: 2px;
+      color: var(--blue);
+      padding: 5px 10px;
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .panel-title::before {
+      content: '▶';
+      font-size: .45rem;
+      color: var(--green)
+    }
+
+    /* ═══ LEFT SIDEBAR ═══ */
+    .left-panel {
+      grid-column: 1;
+      grid-row: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 16px;
+      min-height: 0;
+      overflow-y: auto;
+      /* removed border-right */
+    }
+
+    /* ═══ CENTER ═══ */
+    .center {
+      grid-column: 2;
+      grid-row: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      /* removed border-right */
+    }
+
+    /* ═══ RIGHT SIDEBAR ═══ */
+    .right-panel {
+      grid-column: 3;
+      grid-row: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow-y: auto
+    }
+
+    /* ═══ BOTTOM TERMINAL ═══ */
+    .bottom-panel {
+      grid-column: 1/4;
+      grid-row: 2;
+      /* removed border-top */
+      ;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden
+    }
+
+    .bottom-panel>.panel-title {
+      flex-shrink: 0
+    }
+
+    .bottom-panel>.terminal {
+      flex: 1;
+      min-height: 0
+    }
+
+    /* ═══ REGISTERS ═══ */
+    .reg-section {
+      padding: 8px 10px
+    }
+
+    .reg-block {
+      margin-bottom: 8px
+    }
+
+    .reg-label {
+      font-size: .55rem;
+      color: var(--dim);
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+      text-transform: uppercase
+    }
+
+    .reg-name {
+      font-family: var(--display);
+      font-size: .7rem;
+      color: var(--amber);
+      margin-bottom: 2px
+    }
+
+    .reg-value-row {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      flex-wrap: wrap
+    }
+
+    .reg-val {
+      font-size: .65rem;
+      padding: 1px 6px;
+      border-radius: 3px;
+      border: 1px solid;
+      cursor: default
+    }
+
+    .reg-val.hex {
+      border-color: var(--blue);
+      color: var(--blue)
+    }
+
+    .reg-val.dec {
+      border-color: var(--green);
+      color: var(--green)
+    }
+
+    .reg-val.oct {
+      border-color: var(--purple);
+      color: var(--purple)
+    }
+
+    .reg-val.asc {
+      border-color: var(--amber);
+      color: var(--amber)
+    }
+
+    /* Register bit display */
+    .bits-row {
+      display: flex;
+      gap: 2px;
+      margin-top: 4px
+    }
+
+    .bit-cell {
+      width: 19px;
+      height: 19px;
+      border-radius: 2px;
+      border: 1px solid rgba(0, 255, 156, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .65rem;
+      cursor: pointer;
+      transition: all .15s;
+      position: relative;
+      user-select: none;
+    }
+
+    .bit-cell.on {
+      background: var(--green);
+      color: #000;
+      border-color: var(--green);
+      box-shadow: 0 0 8px var(--green)
+    }
+
+    .bit-cell.off {
+      background: rgba(0, 255, 156, 0.07);
+      color: var(--dim)
+    }
+
+    .bit-cell:hover {
+      transform: scale(1.1);
+      z-index: 1
+    }
+
+    .bit-idx {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: .4rem;
+      color: rgba(255, 255, 255, 0.3)
+    }
+
+    /* Signed/Unsigned toggle */
+    .mode-toggle {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 4px 0
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 3px 0;
+      font-size: .55rem;
+      letter-spacing: 1px;
+      border: none;
+      background: transparent;
+      color: var(--dim);
+      cursor: pointer;
+      transition: all .2s;
+      font-family: var(--mono)
+    }
+
+    .mode-btn.active {
+      background: var(--green);
+      color: #000
+    }
+
+    /* ═══ FLAGS ═══ */
+    .flags-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      padding: 6px 8px
+    }
+
+    .flag {
+      border: 1px solid;
+      border-radius: 3px;
+      padding: 4px 2px;
+      text-align: center;
+      font-size: .5rem;
+      letter-spacing: .5px;
+      transition: all .3s;
+    }
+
+    .flag .flag-name {
+      font-family: var(--display);
+      font-size: .55rem;
+      display: block;
+      margin-bottom: 1px
+    }
+
+    .flag .flag-val {
+      font-size: .8rem;
+      font-weight: 700
+    }
+
+    .flag.zero {
+      border-color: var(--blue);
+      color: var(--blue)
+    }
+
+    .flag.sign {
+      border-color: var(--magenta);
+      color: var(--magenta)
+    }
+
+    .flag.carry {
+      border-color: var(--amber);
+      color: var(--amber)
+    }
+
+    .flag.overflow {
+      border-color: var(--red);
+      color: var(--red)
+    }
+
+    .flag.parity {
+      border-color: var(--purple);
+      color: var(--purple)
+    }
+
+    .flag.aux {
+      border-color: rgba(255, 255, 255, 0.4);
+      color: rgba(255, 255, 255, 0.5)
+    }
+
+    .flag.active {
+
+      animation: flagPulse .4s ease
+    }
+
+    @keyframes flagPulse {
+      0% {
+        transform: scale(1)
+      }
+
+      50% {
+        transform: scale(1.1)
+      }
+
+      100% {
+        transform: scale(1)
+      }
+    }
+
+    /* ═══ BIT EDITOR (center top) ═══ */
+    .bit-editor-panel {
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .editor-title {
+      font-family: var(--display);
+      font-size: .58rem;
+      letter-spacing: 1px;
+      color: var(--green);
+      margin-bottom: 6px
+    }
+
+    .input-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 10px
+    }
+
+    .input-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 0
+    }
+
+    .input-row label {
+      font-size: .55rem;
+      color: var(--dim);
+      width: 28px;
+      flex-shrink: 0
+    }
+
+    .input-row input {
+      background: rgba(0, 255, 156, 0.06);
+      border: 1px solid var(--border);
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: .72rem;
+      padding: 3px 8px;
+      border-radius: 3px;
+      flex: 1;
+      outline: none;
+      transition: border-color .2s;
+      min-width: 0;
+    }
+
+    .input-row input:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 8px rgba(0, 255, 156, 0.3)
+    }
+
+    .active-reg-selector {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 0
+    }
+
+    .reg-sel-btn {
+      padding: 3px 12px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--dim);
+      cursor: pointer;
+      border-radius: 3px;
+      font-family: var(--mono);
+      font-size: .65rem;
+      transition: all .2s;
+    }
+
+    .reg-sel-btn.active {
+      background: var(--amber);
+      border-color: var(--amber);
+      color: #000
+    }
+
+    /* ═══ ALU VISUALIZER ═══ */
+    .alu-caption {
+      flex-shrink: 0;
+      font-family: var(--display);
+      font-size: .55rem;
+      letter-spacing: 2px;
+      color: var(--amber);
+      text-shadow: 0 0 10px rgba(255, 170, 0, 0.4);
+      text-align: center;
+      padding: 8px 10px 4px;
+      opacity: .85;
+    }
+
+    .alu-section {
+      flex: 1 1 0;
+      position: relative;
+      min-height: 220px;
+      overflow: hidden
+    }
+
+    #alu-canvas {
+      width: 100%;
+      height: 100%;
+      display: block
+    }
+
+    /* ═══ OPERATIONS ═══ */
+    .ops-section {
+      flex-shrink: 0;
+      padding: 6px 10px;
+      /* removed border-top */
+    }
+
+    .ops-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 4px;
+      margin-bottom: 0
+    }
+
+    .op-btn {
+      padding: 4px 2px;
+      border: 1px solid;
+      border-radius: 3px;
+      font-family: var(--mono);
+      font-size: .58rem;
+      cursor: pointer;
+      transition: all .2s;
+      letter-spacing: .5px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .op-btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: currentColor;
+      opacity: 0;
+      transition: opacity .2s
+    }
+
+    .op-btn:hover::after {
+      opacity: .12
+    }
+
+    .op-btn:active {
+      transform: scale(.95)
+    }
+
+    .op-btn.alu {
+      border-color: var(--blue);
+      color: var(--blue);
+      background: rgba(0, 200, 255, 0.07)
+    }
+
+    .op-btn.shift {
+      border-color: var(--purple);
+      color: var(--purple);
+      background: rgba(176, 96, 255, 0.07)
+    }
+
+    .op-btn.arith {
+      border-color: var(--green);
+      color: var(--green);
+      background: rgba(0, 255, 156, 0.07)
+    }
+
+    .op-btn.ctrl {
+      border-color: var(--amber);
+      color: var(--amber);
+      background: rgba(255, 170, 0, 0.07)
+    }
+
+    .op-btn.danger {
+      border-color: var(--red);
+      color: var(--red);
+      background: rgba(255, 58, 58, 0.07)
+    }
+
+    /* ═══ RAM VIEWER ═══ */
+    .ram-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+      padding: 6px 8px
+    }
+
+    .ram-cell {
+      border: 1px solid rgba(0, 200, 255, 0.2);
+      border-radius: 2px;
+      padding: 2px;
+      text-align: center;
+      font-size: .55rem;
+      cursor: pointer;
+      transition: all .2s;
+      position: relative;
+    }
+
+    .ram-cell .ram-addr {
+      color: rgba(255, 255, 255, 0.3);
+      font-size: .42rem;
+      display: block
+    }
+
+    .ram-cell .ram-val {
+      color: var(--blue);
+      font-size: .52rem
+    }
+
+    .ram-cell.active {
+      border-color: var(--green);
+      background: rgba(0, 255, 156, 0.1);
+      box-shadow: 0 0 8px rgba(0, 255, 156, 0.3)
+    }
+
+    .ram-cell.pc-here {
+      border-color: var(--amber);
+      background: rgba(255, 170, 0, 0.1)
+    }
+
+    .ram-cell.sp-here {
+      border-color: var(--magenta);
+      background: rgba(255, 0, 110, 0.1)
+    }
+
+    /* ═══ CPU REGISTERS (PC, IR, SP) ═══ */
+    .cpu-regs {
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px
+    }
+
+    .cpu-reg-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 4px 8px
+    }
+
+    .cpu-reg-name {
+      font-family: var(--display);
+      font-size: .55rem;
+      color: var(--amber);
+      width: 26px;
+      flex-shrink: 0
+    }
+
+    .cpu-reg-val {
+      font-size: .65rem;
+      color: var(--green);
+      flex: 1
+    }
+
+    .cpu-reg-desc {
+      font-size: .45rem;
+      color: var(--dim);
+      text-align: right
+    }
+
+    /* ═══ FETCH-DECODE-EXECUTE ═══ */
+    .fde-section {
+      flex-shrink: 0;
+      padding: 5px 10px;
+      /* removed border-top */
+    }
+
+    .fde-stages {
+      display: flex;
+      gap: 4px
+    }
+
+    .fde-stage {
+      flex: 1;
+      padding: 4px 2px;
+      text-align: center;
+      border: 1px solid;
+      border-radius: 3px;
+      font-size: .5rem;
+      letter-spacing: .5px;
+      transition: all .4s;
+      font-family: var(--display);
+    }
+
+    .fde-stage.fetch {
+      border-color: var(--blue);
+      color: var(--blue)
+    }
+
+    .fde-stage.decode {
+      border-color: var(--purple);
+      color: var(--purple)
+    }
+
+    .fde-stage.execute {
+      border-color: var(--green);
+      color: var(--green)
+    }
+
+    .fde-stage.active {
+
+      background: rgba(255, 255, 255, 0.08);
+      animation: fdeAnim .5s ease
+    }
+
+    @keyframes fdeAnim {
+      0% {
+        transform: translateY(-3px)
+      }
+
+      100% {
+        transform: translateY(0)
+      }
+    }
+
+    /* Clock control */
+    .clock-control {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 10px;
+      /* removed border-top */
+    }
+
+    .clock-control label {
+      font-size: .55rem;
+      color: var(--dim)
+    }
+
+    .clock-control input[type=range] {
+      flex: 1;
+      accent-color: var(--green)
+    }
+
+    .clock-hz {
+      font-size: .6rem;
+      color: var(--amber);
+      min-width: 44px
+    }
+
+    /* ═══ ASSEMBLY TERMINAL ═══ */
+    .terminal {
+      display: flex;
+      flex: 1;
+      min-height: 0
+    }
+
+    .asm-editor-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      /* removed border-right */
+    }
+
+    .asm-textarea {
+      flex: 1;
+      min-height: 0;
+      background: transparent;
+      border: none;
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: .78rem;
+      padding: 8px 12px;
+      resize: none;
+      outline: none;
+      line-height: 1.65;
+    }
+
+    .asm-textarea::placeholder {
+      color: rgba(0, 255, 156, 0.25)
+    }
+
+    .asm-controls {
+      flex-shrink: 0;
+      display: flex;
+      gap: 6px;
+      padding: 5px 10px;
+      /* removed border-top */
+      ;
+      background: rgba(0, 0, 0, 0.3);
+      flex-wrap: wrap
+    }
+
+    .btn-run {
+      background: var(--green);
+      color: #000;
+      border: none;
+      padding: 4px 14px;
+      font-family: var(--mono);
+      font-size: .68rem;
+      border-radius: 3px;
+      cursor: pointer;
+      font-weight: 700;
+      letter-spacing: 1px;
+      transition: all .2s
+    }
+
+    .btn-run:hover {
+      box-shadow: 0 0 16px var(--green)
+    }
+
+    .btn-step {
+      background: transparent;
+      color: var(--amber);
+      border: 1px solid var(--amber);
+      padding: 4px 10px;
+      font-family: var(--mono);
+      font-size: .68rem;
+      border-radius: 3px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: all .2s
+    }
+
+    .btn-step:hover {
+      background: rgba(255, 170, 0, 0.15)
+    }
+
+    .btn-clr {
+      background: transparent;
+      color: var(--red);
+      border: 1px solid var(--red);
+      padding: 4px 10px;
+      font-family: var(--mono);
+      font-size: .68rem;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all .2s
+    }
+
+    .asm-output {
+      width: 290px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 0
+    }
+
+    .asm-log {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 8px 12px;
+      font-size: .7rem;
+      line-height: 1.75
+    }
+
+    .log-line {
+      margin-bottom: 2px
+    }
+
+    .log-line.info {
+      color: var(--green)
+    }
+
+    .log-line.warn {
+      color: var(--amber)
+    }
+
+    .log-line.error {
+      color: var(--red)
+    }
+
+    .log-line.step {
+      color: var(--blue)
+    }
+
+    .log-line.cycle {
+      color: var(--purple)
+    }
+
+    .log-line.result {
+      color: var(--green);
+      font-weight: 700
+    }
+
+    /* ═══ SCROLLBAR ═══ */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px
+    }
+
+    /* ═══ PARTICLE CANVAS ═══ */
+    #particle-canvas {
+      position: absolute;
+      inset: 0;
+      pointer-events: none
+    }
+
+    /* ═══ TOOLTIP ═══ */
+    .tooltip {
+      position: fixed;
+      background: rgba(9, 11, 16, 0.95);
+      border: 1px solid var(--green);
+      color: var(--green);
+      font-size: .6rem;
+      padding: 4px 10px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 9998;
+      display: none
+    }
+
+    .edit-target-wrap {
+      padding: 4px 10px 6px
+    }
+
+    .edit-target-wrap .hint {
+      font-size: .52rem;
+      color: var(--dim)
+    }
+
+    .stack-view {
+      padding: 4px 8px;
+      font-size: .58rem;
+      min-height: 48px;
+      max-height: 64px;
+      overflow-y: auto
+    }
+
+    .instr-set {
+      padding: 4px 8px 6px;
+      font-size: .52rem;
+      line-height: 1.55;
+      color: var(--dim)
+    }
+
+    .reg-bits-wrap {
+      display: flex;
+      gap: 2px;
+      margin-bottom: 4px;
+      position: relative;
+      padding-top: 12px
+    }
+
+    .reg-ascii {
+      font-size: .52rem;
+      color: var(--dim);
+      margin-top: 2px
+    }
+
+    .mode-wrap {
+      padding: 0 10px 4px
+    }
+
+    .ops-label {
+      font-size: .5rem;
+      color: var(--dim);
+      letter-spacing: 1px;
+      margin-bottom: 4px
+    }
+
+    .fde-label {
+      font-size: .5rem;
+      color: var(--dim);
+      letter-spacing: 1px;
+      margin-bottom: 4px
+    }
+
+    .fde-info {
+      margin-top: 3px;
+      font-size: .52rem;
+      color: var(--dim);
+      text-align: center
+    }
+
+    .header-sub {
+      font-size: .5rem;
+      color: var(--dim);
+      letter-spacing: 1px
+    }
+
+    .sect-div {
+      height: 1px;
+      background: var(--border);
+      margin: 0
+    }
+
+    /* glow animation for operations */
+    @keyframes opGlow {
+      0% {
+        box-shadow: 0 0 0px currentColor
+      }
+
+      50% {
+        box-shadow: 0 0 20px currentColor
+      }
+
+      100% {
+        box-shadow: 0 0 0px currentColor
+      }
+    }
+
+    .op-flash {
+      animation: opGlow .4s ease
+    }
+
+    /* value change flash */
+    @keyframes valFlash {
+      0% {
+        color: inherit
+      }
+
+      30% {
+        color: #fff;
+        text-shadow: 0 0 12px currentColor
+      }
+
+      100% {
+        color: inherit
+      }
+    }
+
+    .val-flash {
+      animation: valFlash .5s ease
+    }
+
+    /* Step highlight in RAM */
+    @keyframes ramHighlight {
+      0% {
+        background: rgba(0, 255, 156, 0.4)
+      }
+
+      100% {
+        background: rgba(0, 255, 156, 0.1)
+      }
+    }
+
+    /* Responsive */
+    @media(max-width:1100px) {
+      :root {
+        --sidebar-w: 200px
+      }
+
+      .ops-grid {
+        grid-template-columns: repeat(4, 1fr)
+      }
+
+      .asm-output {
+        width: 220px
+      }
+    }
+
+    @media(max-height:720px) {
+      :root {
+        --bottom-h: clamp(140px, 18vh, 170px)
+      }
+
+      .alu-section {
+        min-height: 160px
+      }
+
+      .reg-block {
+        margin-bottom: 5px
+      }
+    }
+
+    @media(max-width:900px) {
+      body {
+        overflow: auto;
+        height: auto;
+        min-height: 100dvh
+      }
+
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto var(--bottom-h);
+        overflow: visible;
+      }
+
+      .left-panel,
+      .right-panel,
+      .center {
+        grid-column: 1;
+        border-right: none;
+        overflow: visible;
+        min-height: auto
+      }
+
+      .left-panel {
+        grid-row: 1
+      }
+
+      .center {
+        grid-row: 2
+      }
+
+      .right-panel {
+        grid-row: 3
+      }
+
+      .bottom-panel {
+        grid-row: 4
+      }
+
+      .alu-section {
+        min-height: 200px
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <h1>8-BIT CPU LAB</h1>
+      <div style="font-size:.55rem;color:var(--dim);letter-spacing:2px" class="header-sub">INTERACTIVE PROCESSOR
+        SIMULATOR</div>
+    </div>
+    <span class="header-badge">v5.0</span>
+    <div class="clock-display">
+      <div class="clock-dot" id="clockDot"></div>
+      <span id="cycleCounter">CYCLE: 0</span>
+      <span style="color:var(--dim)">|</span>
+      <span id="clockHz">1 Hz</span>
+    </div>
+  </header>
+
+  <div class="app">
+
+    <!-- ═══ LEFT: REGISTERS + FLAGS ═══ -->
+    <div class="left-panel panel">
+      <div class="panel-title">Registers</div>
+      <div class="reg-section">
+
+        <!-- Register A -->
+        <div class="reg-block">
+          <div class="reg-name">Register A</div>
+          <div class="reg-bits-wrap" id="regA-bits-wrap">
+            <!-- bits injected by JS -->
+          </div>
+          <div class="reg-value-row" id="regA-vals"></div>
+          <div class="reg-ascii">ASCII: <span id="regA-ascii" style="color:var(--amber)">-</span></div>
+        </div>
+
+        <!-- Register B -->
+        <div class="reg-block">
+          <div class="reg-name">Register B</div>
+          <div class="reg-bits-wrap" id="regB-bits-wrap"></div>
+          <div class="reg-value-row" id="regB-vals"></div>
+          <div class="reg-ascii">ASCII: <span id="regB-ascii" style="color:var(--amber)">-</span></div>
+        </div>
+
+        <!-- Result Register -->
+        <div class="reg-block">
+          <div class="reg-name" style="color:var(--green)">Result (ACC)</div>
+          <div class="reg-bits-wrap" id="regR-bits-wrap"></div>
+          <div class="reg-value-row" id="regR-vals"></div>
+        </div>
+
+      </div>
+
+      <!-- Mode toggle -->
+      <div class="mode-wrap">
+        <div class="mode-toggle">
+          <button class="mode-btn active" onclick="setMode('unsigned')">UNSIGNED</button>
+          <button class="mode-btn" onclick="setMode('signed')">SIGNED</button>
+        </div>
+      </div>
+
+      <div class="sect-div"></div>
+
+      <!-- Flags -->
+      <div class="panel-title">CPU Flags</div>
+      <div class="flags-grid">
+        <div class="flag zero" id="flagZ"><span class="flag-name">Z</span><span class="flag-val"
+            id="fZ">0</span><span>ZERO</span></div>
+        <div class="flag carry" id="flagC"><span class="flag-name">C</span><span class="flag-val"
+            id="fC">0</span><span>CARRY</span></div>
+        <div class="flag sign" id="flagS"><span class="flag-name">S</span><span class="flag-val"
+            id="fS">0</span><span>SIGN</span></div>
+        <div class="flag overflow" id="flagV"><span class="flag-name">V</span><span class="flag-val"
+            id="fV">0</span><span>OVFL</span></div>
+        <div class="flag parity" id="flagP"><span class="flag-name">P</span><span class="flag-val"
+            id="fP">0</span><span>PARITY</span></div>
+        <div class="flag aux" id="flagA"><span class="flag-name">A</span><span class="flag-val"
+            id="fA">0</span><span>AUX-C</span></div>
+      </div>
+
+      <div class="sect-div"></div>
+
+      <!-- Active register selector -->
+      <div class="panel-title">Edit Target</div>
+      <div class="edit-target-wrap">
+        <div class="active-reg-selector">
+          <button class="reg-sel-btn active" onclick="selectReg('A')">REG A</button>
+          <button class="reg-sel-btn" onclick="selectReg('B')">REG B</button>
+        </div>
+        <div class="hint">Click bits or use editor in center panel</div>
+      </div>
+    </div>
+
+    <!-- ═══ CENTER ═══ -->
+    <div class="center panel" style="border:none">
+
+      <!-- Bit Editor -->
+      <div class="bit-editor-panel">
+        <div class="editor-title">⬡ BIT EDITOR & CONVERSION</div>
+        <div class="input-grid">
+          <div class="input-row">
+            <label>BIN</label>
+            <input id="inBin" maxlength="8" placeholder="00000000" oninput="fromInput('bin')">
+          </div>
+          <div class="input-row">
+            <label>DEC</label>
+            <input id="inDec" placeholder="0–255" oninput="fromInput('dec')">
+          </div>
+          <div class="input-row">
+            <label>HEX</label>
+            <input id="inHex" placeholder="0x00" oninput="fromInput('hex')">
+          </div>
+          <div class="input-row">
+            <label>OCT</label>
+            <input id="inOct" placeholder="000" oninput="fromInput('oct')">
+          </div>
+        </div>
+      </div>
+
+      <!-- ALU Canvas (particle animation) -->
+      <div class="alu-caption">ALU — ARITHMETIC LOGIC UNIT</div>
+      <div class="alu-section" style="position:relative">
+        <canvas id="alu-canvas"></canvas>
+        <canvas id="particle-canvas"></canvas>
+      </div>
+
+      <!-- Operations -->
+      <div class="ops-section">
+        <div class="ops-label">OPERATIONS</div>
+        <div class="ops-grid">
+          <button class="op-btn arith" onclick="doOp('ADD')">ADD A+B</button>
+          <button class="op-btn arith" onclick="doOp('SUB')">SUB A-B</button>
+          <button class="op-btn alu" onclick="doOp('AND')">AND</button>
+          <button class="op-btn alu" onclick="doOp('OR')">OR</button>
+          <button class="op-btn alu" onclick="doOp('XOR')">XOR</button>
+          <button class="op-btn alu" onclick="doOp('NOT')">NOT A</button>
+          <button class="op-btn shift" onclick="doOp('SHL')">SHL ≪</button>
+          <button class="op-btn shift" onclick="doOp('SHR')">SHR ≫</button>
+          <button class="op-btn shift" onclick="doOp('ROL')">ROL ↺</button>
+          <button class="op-btn shift" onclick="doOp('ROR')">ROR ↻</button>
+          <button class="op-btn ctrl" onclick="doOp('SWAP')">SWAP A↔B</button>
+          <button class="op-btn danger" onclick="doOp('CLR')">CLR ALL</button>
+        </div>
+      </div>
+
+      <!-- Fetch-Decode-Execute -->
+      <div class="fde-section">
+        <div class="fde-label">INSTRUCTION CYCLE</div>
+        <div class="fde-stages">
+          <div class="fde-stage fetch" id="stageFetch">1 FETCH</div>
+          <div class="fde-stage decode" id="stageDecode">2 DECODE</div>
+          <div class="fde-stage execute" id="stageExec">3 EXECUTE</div>
+        </div>
+        <div class="fde-info" id="fdeInfo">IDLE</div>
+      </div>
+
+      <!-- Clock -->
+      <div class="clock-control">
+        <label>CLOCK SPEED</label>
+        <input type="range" id="clockSpeed" min="1" max="10" value="1" oninput="updateClock(this.value)">
+        <span class="clock-hz" id="clockHzLabel">1 Hz</span>
+        <button class="op-btn ctrl" style="padding:4px 12px;font-size:.6rem" onclick="toggleClock()">⏱ AUTO</button>
+      </div>
+
+    </div>
+
+    <!-- ═══ RIGHT: RAM + PC ═══ -->
+    <div class="right-panel panel">
+      <div class="panel-title">Memory (RAM)</div>
+      <div class="ram-grid" id="ramGrid"></div>
+
+      <div class="sect-div"></div>
+
+      <div class="panel-title">CPU Internals</div>
+      <div class="cpu-regs">
+        <div class="cpu-reg-row">
+          <div class="cpu-reg-name">PC</div>
+          <div class="cpu-reg-val" id="pcVal">0x00</div>
+          <div class="cpu-reg-desc">Program Counter</div>
+        </div>
+        <div class="cpu-reg-row">
+          <div class="cpu-reg-name">IR</div>
+          <div class="cpu-reg-val" id="irVal">NOP</div>
+          <div class="cpu-reg-desc">Instruction Reg</div>
+        </div>
+        <div class="cpu-reg-row">
+          <div class="cpu-reg-name">SP</div>
+          <div class="cpu-reg-val" id="spVal">0x0F</div>
+          <div class="cpu-reg-desc">Stack Pointer</div>
+        </div>
+        <div class="cpu-reg-row">
+          <div class="cpu-reg-name">MAR</div>
+          <div class="cpu-reg-val" id="marVal">0x00</div>
+          <div class="cpu-reg-desc">Mem Address Reg</div>
+        </div>
+      </div>
+
+      <div class="sect-div"></div>
+
+      <div class="panel-title">Stack</div>
+      <div id="stackView" class="stack-view">
+        <div style="color:var(--dim);text-align:center;margin-top:20px">STACK EMPTY</div>
+      </div>
+
+      <div class="sect-div"></div>
+
+      <div class="panel-title">Instruction Set</div>
+      <div class="instr-set">
+        MOV A,n &nbsp;| MOV B,n<br>
+        ADD A,B &nbsp;| SUB A,B<br>
+        AND A,B &nbsp;| OR A,B<br>
+        XOR A,B &nbsp;| NOT A<br>
+        SHL A &nbsp;&nbsp;&nbsp;| SHR A<br>
+        ROL A &nbsp;&nbsp;&nbsp;| ROR A<br>
+        PUSH A &nbsp;&nbsp;| POP A<br>
+        JMP n &nbsp;&nbsp;&nbsp;| JZ n<br>
+        JNZ n &nbsp;&nbsp;| STORE n<br>
+        LOAD n &nbsp;&nbsp;| NOP<br>
+        HLT
+      </div>
+    </div>
+
+    <!-- ═══ BOTTOM: ASSEMBLY TERMINAL ═══ -->
+    <div class="bottom-panel panel">
+      <div class="panel-title" style="border-bottom:1px solid var(--border)">Assembly Simulator</div>
+      <div class="terminal">
+        <div class="asm-editor-wrap">
+          <textarea class="asm-textarea" id="asmCode"
+            placeholder="; Type your assembly program here&#10;; Example:&#10;MOV A,42&#10;MOV B,13&#10;ADD A,B&#10;PUSH A&#10;NOT A&#10;SHL A&#10;HLT"></textarea>
+          <div class="asm-controls">
+            <button class="btn-run" onclick="runProgram()">▶ RUN</button>
+            <button class="btn-step" onclick="stepProgram()">⏩ STEP</button>
+            <button class="btn-clr" onclick="clearProgram()">✕ CLR</button>
+            <button class="op-btn ctrl" style="padding:5px 12px;font-size:.65rem" onclick="loadExample()">📂
+              EXAMPLE</button>
+            <div style="margin-left:auto;font-size:.6rem;color:var(--dim)">Line: <span id="asmLine">-</span></div>
+          </div>
+        </div>
+        <div class="asm-output">
+          <div class="panel-title" style="border-bottom:1px solid var(--border)">Execution Log</div>
+          <div class="asm-log" id="asmLog">
+            <div class="log-line info">> 8-Bit CPU Lab initialized.</div>
+            <div class="log-line info">> All registers cleared.</div>
+            <div class="log-line step">> Load a program and press RUN.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════════
+    // CORE CPU STATE
+    // ═══════════════════════════════════════════════════════════
+    const cpu = {
+      A: 0, B: 0, R: 0,
+      PC: 0, SP: 15, IR: 'NOP',
+      flags: { Z: 0, C: 0, S: 0, V: 0, P: 0, A: 0 },
+      ram: new Uint8Array(16),
+      stack: [],
+      cycle: 0,
+      mode: 'unsigned',
+      running: false,
+      halted: false,
+    };
+
+    let activeReg = 'A';
+    let clockInterval = null;
+    let autoClockOn = false;
+    let clockHz = 1;
+    let programLines = [];
+    let stepIdx = 0;
+
+    // ═══════════════════════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════════════════════
+    function init() {
+      buildBitsUI('A');
+      buildBitsUI('B');
+      buildBitsUI('R');
+      buildRAM();
+      renderAll();
+      initALUCanvas();
+      initParticles();
+      requestAnimationFrame(animLoop);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BIT DISPLAY
+    // ═══════════════════════════════════════════════════════════
+    function buildBitsUI(reg) {
+      const wrap = document.getElementById(`reg${reg}-bits-wrap`);
+      wrap.innerHTML = '';
+      for (let i = 7; i >= 0; i--) {
+        const cell = document.createElement('div');
+        cell.className = 'bit-cell off';
+        cell.id = `reg${reg}-bit${i}`;
+        cell.textContent = '0';
+        const idx = document.createElement('div');
+        idx.className = 'bit-idx';
+        idx.textContent = i;
+        cell.appendChild(idx);
+        if (reg !== 'R') {
+          cell.onclick = () => toggleBit(reg, i);
+        }
+        wrap.appendChild(cell);
+      }
+    }
+
+    function toggleBit(reg, bit) {
+      cpu[reg] ^= (1 << bit);
+      cpu[reg] &= 0xFF;
+      updateInputs(cpu[reg]);
+      renderAll();
+      spawnParticles(reg);
+    }
+
+    function renderBits(reg, val) {
+      for (let i = 0; i < 8; i++) {
+        const cell = document.getElementById(`reg${reg}-bit${i}`);
+        if (!cell) continue;
+        const on = (val >> i) & 1;
+        cell.className = 'bit-cell ' + (on ? 'on' : 'off');
+        cell.childNodes[0] && (cell.childNodes[0].nodeValue = on ? '1' : '0');
+        // Fix: set text properly
+        cell.textContent = '';
+        const idx = document.createElement('div');
+        idx.className = 'bit-idx';
+        idx.textContent = i;
+        cell.textContent = on ? '1' : '0';
+        cell.appendChild(idx);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // VALUE DISPLAY
+    // ═══════════════════════════════════════════════════════════
+    function renderReg(reg, val) {
+      renderBits(reg, val);
+      const valsEl = document.getElementById(`reg${reg}-vals`);
+      if (!valsEl) return;
+      const signed = (val > 127) ? val - 256 : val;
+      const displayDec = cpu.mode === 'signed' ? signed : val;
+      valsEl.innerHTML = `
+    <span class="reg-val hex">0x${val.toString(16).toUpperCase().padStart(2, '0')}</span>
+    <span class="reg-val dec">${displayDec}</span>
+    <span class="reg-val oct">${val.toString(8).padStart(3, '0')}</span>
+  `;
+      if (reg === 'A' || reg === 'B') {
+        const ascEl = document.getElementById(`reg${reg}-ascii`);
+        if (ascEl) {
+          ascEl.textContent = val >= 32 && val < 127 ? `'${String.fromCharCode(val)}'` : (val === 0 ? 'NUL' : '·');
+        }
+      }
+    }
+
+    function renderFlags() {
+      const f = cpu.flags;
+      const map = { Z: [f.Z, 'flagZ', 'fZ'], C: [f.C, 'flagC', 'fC'], S: [f.S, 'flagS', 'fS'], V: [f.V, 'flagV', 'fV'], P: [f.P, 'flagP', 'fP'], A: [f.A, 'flagA', 'fA'] };
+      for (const [k, [v, fid, vid]] of Object.entries(map)) {
+        const flagEl = document.getElementById(fid);
+        const valEl = document.getElementById(vid);
+        if (valEl) valEl.textContent = v;
+        if (flagEl) flagEl.classList.toggle('active', v === 1);
+      }
+    }
+
+    function renderCPURegs() {
+      document.getElementById('pcVal').textContent = '0x' + cpu.PC.toString(16).toUpperCase().padStart(2, '0');
+      document.getElementById('irVal').textContent = cpu.IR;
+      document.getElementById('spVal').textContent = '0x' + cpu.SP.toString(16).toUpperCase().padStart(2, '0');
+      document.getElementById('marVal').textContent = '0x' + cpu.PC.toString(16).toUpperCase().padStart(2, '0');
+      document.getElementById('cycleCounter').textContent = 'CYCLE: ' + cpu.cycle;
+    }
+
+    function renderRAM() {
+      const grid = document.getElementById('ramGrid');
+      const cells = grid.querySelectorAll('.ram-cell');
+      cells.forEach((cell, i) => {
+        cell.classList.toggle('pc-here', i === cpu.PC && cpu.running);
+        cell.classList.toggle('sp-here', i === cpu.SP);
+        const valEl = cell.querySelector('.ram-val');
+        if (valEl) valEl.textContent = '0x' + cpu.ram[i].toString(16).toUpperCase().padStart(2, '0');
+      });
+    }
+
+    function renderStack() {
+      const sv = document.getElementById('stackView');
+      if (cpu.stack.length === 0) {
+        sv.innerHTML = '<div style="color:var(--dim);text-align:center;margin-top:20px">STACK EMPTY</div>';
+      } else {
+        sv.innerHTML = cpu.stack.map((v, i) =>
+          `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span style="color:var(--dim)">[${cpu.stack.length - 1 - i}]</span>
+        <span style="color:var(--green)">0x${v.toString(16).toUpperCase().padStart(2, '0')}</span>
+        <span style="color:var(--dim)">${v}</span>
+      </div>`
+        ).reverse().join('');
+      }
+    }
+
+    function renderAll() {
+      renderReg('A', cpu.A);
+      renderReg('B', cpu.B);
+      renderReg('R', cpu.R);
+      renderFlags();
+      renderCPURegs();
+      renderRAM();
+      renderStack();
+      updateInputs(cpu[activeReg]);
+      drawALU();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // RAM
+    // ═══════════════════════════════════════════════════════════
+    function buildRAM() {
+      const grid = document.getElementById('ramGrid');
+      grid.innerHTML = '';
+      for (let i = 0; i < 16; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'ram-cell';
+        cell.innerHTML = `<span class="ram-addr">${i.toString(16).toUpperCase().padStart(2, '0')}</span><span class="ram-val">0x00</span>`;
+        cell.title = `RAM[${i}]`;
+        cell.onclick = () => ramClick(i);
+        grid.appendChild(cell);
+      }
+    }
+
+    function ramClick(i) {
+      const v = prompt(`RAM[${i.toString(16).toUpperCase()}] — Enter value (dec or 0x hex):`, cpu.ram[i]);
+      if (v === null) return;
+      const parsed = v.startsWith('0x') || v.startsWith('0X') ? parseInt(v, 16) : parseInt(v, 10);
+      if (!isNaN(parsed)) { cpu.ram[i] = parsed & 0xFF; renderRAM(); }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // INPUTS
+    // ═══════════════════════════════════════════════════════════
+    function updateInputs(val) {
+      document.getElementById('inBin').value = val.toString(2).padStart(8, '0');
+      document.getElementById('inDec').value = val;
+      document.getElementById('inHex').value = '0x' + val.toString(16).toUpperCase().padStart(2, '0');
+      document.getElementById('inOct').value = val.toString(8).padStart(3, '0');
+    }
+
+    function fromInput(type) {
+      let val = 0;
+      try {
+        if (type === 'bin') val = parseInt(document.getElementById('inBin').value, 2);
+        if (type === 'dec') val = parseInt(document.getElementById('inDec').value, 10);
+        if (type === 'hex') {
+          let h = document.getElementById('inHex').value.replace(/^0x/i, '');
+          val = parseInt(h, 16);
+        }
+        if (type === 'oct') val = parseInt(document.getElementById('inOct').value, 8);
+      } catch (e) { return; }
+      if (isNaN(val)) return;
+      val = Math.max(0, Math.min(255, val)) & 0xFF;
+      cpu[activeReg] = val;
+      renderAll();
+      spawnParticles(activeReg);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // OPERATIONS
+    // ═══════════════════════════════════════════════════════════
+    function computeFlags(result, a, b, op) {
+      const r8 = result & 0xFF;
+      cpu.flags.Z = r8 === 0 ? 1 : 0;
+      cpu.flags.S = (r8 >> 7) & 1;
+      if (op === 'ADD' || op === 'SUB') {
+        cpu.flags.C = (result > 255 || result < 0) ? 1 : 0;
+      }
+      let ones = r8.toString(2).split('').filter(x => x === '1').length;
+      cpu.flags.P = (ones % 2 === 0) ? 1 : 0;
+      // Overflow: only for ADD/SUB
+      if (op === 'ADD') {
+        const sa = a > 127 ? a - 256 : a;
+        const sb = b > 127 ? b - 256 : b;
+        const sr = sa + sb;
+        cpu.flags.V = (sr > 127 || sr < -128) ? 1 : 0;
+        // Aux carry: carry from bit 3
+        cpu.flags.A = (((a & 0xF) + (b & 0xF)) > 0xF) ? 1 : 0;
+      } else if (op === 'SUB') {
+        const sa = a > 127 ? a - 256 : a;
+        const sb = b > 127 ? b - 256 : b;
+        const sr = sa - sb;
+        cpu.flags.V = (sr > 127 || sr < -128) ? 1 : 0;
+        cpu.flags.A = ((a & 0xF) < (b & 0xF)) ? 1 : 0;
+      } else {
+        cpu.flags.V = 0;
+        cpu.flags.A = 0;
+      }
+    }
+
+    function doOp(op, silent = false) {
+      cpu.cycle++;
+      let result = 0;
+      let prev = cpu[activeReg];
+
+      switch (op) {
+        case 'ADD':
+          result = cpu.A + cpu.B;
+          computeFlags(result, cpu.A, cpu.B, 'ADD');
+          cpu.R = result & 0xFF;
+          cpu.A = cpu.R;
+          break;
+        case 'SUB':
+          result = cpu.A - cpu.B;
+          computeFlags(result, cpu.A, cpu.B, 'SUB');
+          cpu.R = ((result % 256) + 256) % 256;
+          cpu.A = cpu.R;
+          break;
+        case 'AND':
+          cpu.R = (cpu.A & cpu.B) & 0xFF;
+          cpu.A = cpu.R;
+          computeFlags(cpu.R, cpu.A, cpu.B, 'AND');
+          break;
+        case 'OR':
+          cpu.R = (cpu.A | cpu.B) & 0xFF;
+          cpu.A = cpu.R;
+          computeFlags(cpu.R, cpu.A, cpu.B, 'OR');
+          break;
+        case 'XOR':
+          cpu.R = (cpu.A ^ cpu.B) & 0xFF;
+          cpu.A = cpu.R;
+          computeFlags(cpu.R, cpu.A, cpu.B, 'XOR');
+          break;
+        case 'NOT':
+          cpu.R = (~cpu.A) & 0xFF;
+          cpu.A = cpu.R;
+          computeFlags(cpu.R, cpu.A, 0, 'NOT');
+          break;
+        case 'SHL':
+          cpu.flags.C = (cpu.A >> 7) & 1;
+          cpu.A = (cpu.A << 1) & 0xFF;
+          cpu.R = cpu.A;
+          computeFlags(cpu.A, cpu.A, 0, 'SHL');
+          break;
+        case 'SHR':
+          cpu.flags.C = cpu.A & 1;
+          cpu.A = (cpu.A >> 1) & 0xFF;
+          cpu.R = cpu.A;
+          computeFlags(cpu.A, cpu.A, 0, 'SHR');
+          break;
+        case 'ROL': {
+          const msb = (cpu.A >> 7) & 1;
+          cpu.A = ((cpu.A << 1) | msb) & 0xFF;
+          cpu.R = cpu.A;
+          computeFlags(cpu.A, cpu.A, 0, 'ROL');
+          break;
+        }
+        case 'ROR': {
+          const lsb = cpu.A & 1;
+          cpu.A = ((cpu.A >> 1) | (lsb << 7)) & 0xFF;
+          cpu.R = cpu.A;
+          computeFlags(cpu.A, cpu.A, 0, 'ROR');
+          break;
+        }
+        case 'SWAP': {
+          let tmp = cpu.A; cpu.A = cpu.B; cpu.B = tmp; cpu.R = cpu.A;
+          break;
+        }
+        case 'CLR':
+          cpu.A = cpu.B = cpu.R = 0;
+          cpu.flags = { Z: 0, C: 0, S: 0, V: 0, P: 0, A: 0 };
+          cpu.ram.fill(0);
+          cpu.stack = [];
+          cpu.PC = 0; cpu.SP = 15;
+          cpu.IR = 'NOP';
+          break;
+      }
+
+      if (!silent) {
+        animateFDE(op);
+        spawnOpParticles();
+      }
+      renderAll();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // FETCH-DECODE-EXECUTE ANIMATION
+    // ═══════════════════════════════════════════════════════════
+    function animateFDE(op) {
+      const fetch = document.getElementById('stageFetch');
+      const decode = document.getElementById('stageDecode');
+      const exec = document.getElementById('stageExec');
+      const info = document.getElementById('fdeInfo');
+
+      fetch.classList.add('active');
+      info.textContent = `FETCHING: ${op}`;
+      setTimeout(() => {
+        fetch.classList.remove('active');
+        decode.classList.add('active');
+        info.textContent = `DECODING: ${op}`;
+        setTimeout(() => {
+          decode.classList.remove('active');
+          exec.classList.add('active');
+          info.textContent = `EXECUTING: ${op} → RESULT: 0x${cpu.R.toString(16).toUpperCase().padStart(2, '0')} (${cpu.R})`;
+          setTimeout(() => {
+            exec.classList.remove('active');
+            info.textContent = `DONE: ${op} [Z=${cpu.flags.Z} C=${cpu.flags.C} S=${cpu.flags.S} V=${cpu.flags.V}]`;
+          }, 350);
+        }, 350);
+      }, 350);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // ASSEMBLY INTERPRETER
+    // ═══════════════════════════════════════════════════════════
+    function parseProgram(code) {
+      return code.split('\n')
+        .map(l => l.replace(/;.*/, '').trim())
+        .filter(l => l.length > 0);
+    }
+
+    function execInstruction(line) {
+      const parts = line.toUpperCase().split(/[\s,]+/);
+      const instr = parts[0];
+      const op1 = parts[1];
+      const op2 = parts[2];
+
+      cpu.IR = instr;
+      cpu.cycle++;
+
+      const getVal = (s) => {
+        if (s === 'A') return cpu.A;
+        if (s === 'B') return cpu.B;
+        const n = s.startsWith('0X') ? parseInt(s, 16) : parseInt(s, 10);
+        return isNaN(n) ? 0 : n & 0xFF;
+      };
+
+      let logMsg = '';
+
+      switch (instr) {
+        case 'MOV':
+          if (op1 === 'A') { cpu.A = getVal(op2); logMsg = `MOV A, ${cpu.A}`; }
+          else if (op1 === 'B') { cpu.B = getVal(op2); logMsg = `MOV B, ${cpu.B}`; }
+          cpu.R = op1 === 'A' ? cpu.A : cpu.B;
+          computeFlags(cpu.R, cpu.R, 0, 'MOV');
+          break;
+        case 'ADD':
+          doOp('ADD', true); logMsg = `ADD A+B → ${cpu.A} (C=${cpu.flags.C})`; break;
+        case 'SUB':
+          doOp('SUB', true); logMsg = `SUB A-B → ${cpu.A} (Z=${cpu.flags.Z})`; break;
+        case 'AND':
+          doOp('AND', true); logMsg = `AND A&B → ${cpu.A}`; break;
+        case 'OR':
+          doOp('OR', true); logMsg = `OR A|B → ${cpu.A}`; break;
+        case 'XOR':
+          doOp('XOR', true); logMsg = `XOR A^B → ${cpu.A}`; break;
+        case 'NOT':
+          doOp('NOT', true); logMsg = `NOT A → ${cpu.A}`; break;
+        case 'SHL':
+          doOp('SHL', true); logMsg = `SHL A → ${cpu.A} (C=${cpu.flags.C})`; break;
+        case 'SHR':
+          doOp('SHR', true); logMsg = `SHR A → ${cpu.A} (C=${cpu.flags.C})`; break;
+        case 'ROL':
+          doOp('ROL', true); logMsg = `ROL A → ${cpu.A}`; break;
+        case 'ROR':
+          doOp('ROR', true); logMsg = `ROR A → ${cpu.A}`; break;
+        case 'PUSH':
+          cpu.stack.push(cpu.A);
+          cpu.SP = Math.max(0, cpu.SP - 1);
+          logMsg = `PUSH A (${cpu.A}) → Stack[${cpu.stack.length - 1}]`; break;
+        case 'POP':
+          if (cpu.stack.length > 0) {
+            cpu.A = cpu.stack.pop();
+            cpu.SP = Math.min(15, cpu.SP + 1);
+            logMsg = `POP → A=${cpu.A}`;
+          } else { logMsg = 'POP: Stack underflow!'; }
+          break;
+        case 'STORE': {
+          const addr = (op1 !== undefined) ? getVal(op1) & 0xF : cpu.PC & 0xF;
+          cpu.ram[addr] = cpu.A;
+          logMsg = `STORE A(${cpu.A}) → RAM[${addr}]`; break;
+        }
+        case 'LOAD': {
+          const addr = (op1 !== undefined) ? getVal(op1) & 0xF : cpu.PC & 0xF;
+          cpu.A = cpu.ram[addr];
+          logMsg = `LOAD RAM[${addr}] → A(${cpu.A})`; break;
+        }
+        case 'JMP':
+          cpu.PC = getVal(op1) & 0xF;
+          logMsg = `JMP → PC=${cpu.PC}`; return { jump: cpu.PC, log: logMsg };
+        case 'JZ':
+          if (cpu.flags.Z) {
+            cpu.PC = getVal(op1) & 0xF;
+            logMsg = `JZ (taken) → PC=${cpu.PC}`; return { jump: cpu.PC, log: logMsg };
+          } else { logMsg = `JZ (not taken)`; } break;
+        case 'JNZ':
+          if (!cpu.flags.Z) {
+            cpu.PC = getVal(op1) & 0xF;
+            logMsg = `JNZ (taken) → PC=${cpu.PC}`; return { jump: cpu.PC, log: logMsg };
+          } else { logMsg = `JNZ (not taken)`; } break;
+        case 'NOP':
+          logMsg = 'NOP'; break;
+        case 'HLT':
+          return { halt: true, log: 'HLT — CPU halted' };
+        default:
+          logMsg = `Unknown instruction: ${instr}`;
+      }
+
+      return { log: logMsg };
+    }
+
+    function addLog(msg, type = 'info') {
+      const log = document.getElementById('asmLog');
+      const line = document.createElement('div');
+      line.className = `log-line ${type}`;
+      line.textContent = `> ${msg}`;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function resetCPU(keepRAM = false) {
+      cpu.A = cpu.B = cpu.R = 0;
+      cpu.flags = { Z: 0, C: 0, S: 0, V: 0, P: 0, A: 0 };
+      cpu.stack = [];
+      cpu.PC = 0;
+      cpu.SP = 15;
+      cpu.IR = 'NOP';
+      cpu.halted = false;
+      cpu.running = false;
+      if (!keepRAM) cpu.ram.fill(0);
+    }
+
+    async function runProgram() {
+      const code = document.getElementById('asmCode').value;
+      programLines = parseProgram(code);
+      if (programLines.length === 0) {
+        addLog('No instructions to run. Type a program first.', 'error');
+        return;
+      }
+
+      resetCPU();
+      stepIdx = 0;
+      cpu.running = true;
+
+      document.getElementById('asmLog').innerHTML = '';
+      addLog(`Loaded ${programLines.length} instructions`, 'info');
+
+      const maxSteps = 200;
+      let steps = 0;
+      while (!cpu.halted && steps < maxSteps) {
+        if (cpu.PC >= programLines.length) break;
+        stepIdx = cpu.PC;
+
+        const line = programLines[stepIdx];
+        document.getElementById('asmLine').textContent = stepIdx + 1;
+        addLog(`[${stepIdx}] ${line}`, 'step');
+        animateFDE(line.split(' ')[0]);
+
+        const result = execInstruction(line);
+        renderAll();
+        spawnOpParticles();
+
+        if (result.log) addLog(result.log, 'result');
+        if (result.halt) { cpu.halted = true; addLog('Program halted.', 'warn'); break; }
+        if (result.jump !== undefined) { cpu.PC = result.jump; }
+        else cpu.PC = stepIdx + 1;
+
+        steps++;
+        await new Promise(r => setTimeout(r, Math.max(100, 1000 / clockHz)));
+      }
+
+      cpu.running = false;
+      if (steps >= maxSteps && !cpu.halted) {
+        addLog(`Stopped: step limit (${maxSteps}) reached. Check for infinite loops.`, 'warn');
+      }
+      addLog(`Execution complete. Cycles: ${cpu.cycle}`, 'cycle');
+      renderAll();
+    }
+
+    function stepProgram() {
+      if (!programLines.length) {
+        const code = document.getElementById('asmCode').value;
+        programLines = parseProgram(code);
+        if (programLines.length === 0) {
+          addLog('No instructions to step. Type a program first.', 'error');
+          return;
+        }
+        resetCPU();
+        document.getElementById('asmLog').innerHTML = '';
+        addLog(`Loaded ${programLines.length} instructions`, 'info');
+      }
+      if (cpu.halted || cpu.PC >= programLines.length) {
+        addLog('Program ended or halted. Press CLR to reset.', 'warn');
+        return;
+      }
+      const line = programLines[cpu.PC];
+      document.getElementById('asmLine').textContent = cpu.PC + 1;
+      addLog(`[${cpu.PC}] ${line}`, 'step');
+      animateFDE(line.split(' ')[0]);
+      const result = execInstruction(line);
+      renderAll();
+      spawnOpParticles();
+      if (result.log) addLog(result.log, 'result');
+      if (result.halt) { cpu.halted = true; addLog('HLT. Program halted.', 'warn'); return; }
+      if (result.jump !== undefined) { cpu.PC = result.jump; }
+      else cpu.PC++;
+    }
+
+    function clearProgram() {
+      programLines = [];
+      stepIdx = 0;
+      cpu.PC = 0;
+      cpu.halted = false;
+      cpu.running = false;
+      document.getElementById('asmLog').innerHTML = '';
+      addLog('Log cleared. Ready.', 'info');
+    }
+
+    function loadExample() {
+      document.getElementById('asmCode').value = `; Fibonacci-style demo
+MOV A,1
+MOV B,1
+PUSH A
+ADD A,B
+PUSH A
+MOV B,3
+ADD A,B
+STORE 5
+SHL A
+PUSH A
+NOT A
+AND A,B
+PUSH A
+HLT`;
+      addLog('Example program loaded.', 'info');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // MODE & REG SELECTION
+    // ═══════════════════════════════════════════════════════════
+    function setMode(mode) {
+      cpu.mode = mode;
+      document.querySelectorAll('.mode-btn').forEach(b => {
+        b.classList.toggle('active', b.textContent.toLowerCase() === mode);
+      });
+      renderAll();
+    }
+
+    function selectReg(r) {
+      activeReg = r;
+      document.querySelectorAll('.reg-sel-btn').forEach(b => {
+        b.classList.toggle('active', b.textContent.includes(r));
+      });
+      updateInputs(cpu[r]);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // CLOCK
+    // ═══════════════════════════════════════════════════════════
+    function updateClock(v) {
+      clockHz = parseInt(v);
+      document.getElementById('clockHzLabel').textContent = clockHz + ' Hz';
+      document.getElementById('clockHz').textContent = clockHz + ' Hz';
+      if (autoClockOn) {
+        clearInterval(clockInterval);
+        clockInterval = setInterval(autoClock, 1000 / clockHz);
+      }
+    }
+
+    function toggleClock() {
+      autoClockOn = !autoClockOn;
+      if (autoClockOn) {
+        clockInterval = setInterval(autoClock, 1000 / clockHz);
+        addLog(`Auto-clock started at ${clockHz} Hz`, 'cycle');
+      } else {
+        clearInterval(clockInterval);
+        addLog('Auto-clock stopped.', 'warn');
+      }
+    }
+
+    function autoClock() {
+      cpu.cycle++;
+      document.getElementById('cycleCounter').textContent = 'CYCLE: ' + cpu.cycle;
+      // Pulse the clock dot
+      const dot = document.getElementById('clockDot');
+      dot.style.background = 'var(--amber)';
+      setTimeout(() => dot.style.background = 'var(--green)', 80);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // ALU CANVAS VISUALIZATION
+    // ═══════════════════════════════════════════════════════════
+    let aluCtx, aluW, aluH;
+    function initALUCanvas() {
+      const canvas = document.getElementById('alu-canvas');
+      resizeALU(canvas);
+      aluCtx = canvas.getContext('2d');
+      new ResizeObserver(() => resizeALU(canvas)).observe(canvas.parentElement);
+    }
+
+    function resizeALU(canvas) {
+      const parent = canvas.parentElement;
+      canvas.width = parent.offsetWidth;
+      canvas.height = parent.offsetHeight;
+      aluW = canvas.width;
+      aluH = canvas.height;
+    }
+
+    function drawALU() {
+      if (!aluCtx) return;
+      const W = aluW, H = aluH;
+      aluCtx.clearRect(0, 0, W, H);
+
+      // Background glow
+      const bg = aluCtx.createRadialGradient(W / 2, H / 2, 10, W / 2, H / 2, Math.min(W, H) * 0.6);
+      bg.addColorStop(0, 'rgba(0,200,255,0.04)');
+      bg.addColorStop(1, 'transparent');
+      aluCtx.fillStyle = bg;
+      aluCtx.fillRect(0, 0, W, H);
+
+      // Box sizing scales with available height so nothing overlaps even when small
+      const boxH = Math.max(34, Math.min(50, H * 0.16));
+      const boxW = Math.max(72, Math.min(96, W * 0.16));
+      const aluHalfH = Math.max(28, Math.min(40, H * 0.12));
+
+      const cx = W / 2;
+      // Three clear bands with margin reserved for box height + gap
+      const regY = boxH * 0.7 + 10;
+      const outY = H - boxH * 0.7 - 10;
+      const aluY = (regY + outY) / 2;
+
+      const regAx = W * 0.24, regBx = W * 0.76;
+
+      // Connecting wires drawn first (under the boxes)
+      const wireAlpha = 0.45;
+      drawWire(aluCtx, regAx, regY + boxH / 2, cx - aluHalfH * 0.6, aluY - aluHalfH * 0.55, '#00FF9C', wireAlpha);
+      drawWire(aluCtx, regBx, regY + boxH / 2, cx + aluHalfH * 0.6, aluY - aluHalfH * 0.55, '#00C8FF', wireAlpha);
+      drawWire(aluCtx, cx, aluY + aluHalfH * 0.65, cx, outY - boxH / 2, '#FFAA00', wireAlpha);
+
+      drawBitFlow(aluCtx, regAx, regY + boxH / 2, cx - aluHalfH * 0.6, aluY - aluHalfH * 0.55, cpu.A, '#00FF9C');
+      drawBitFlow(aluCtx, regBx, regY + boxH / 2, cx + aluHalfH * 0.6, aluY - aluHalfH * 0.55, cpu.B, '#00C8FF');
+      drawBitFlow(aluCtx, cx, aluY + aluHalfH * 0.65, cx, outY - boxH / 2, cpu.R, '#FFAA00');
+
+      // Draw Register A box
+      drawRegBox(aluCtx, regAx, regY, 'REG A', cpu.A, '#00FF9C', boxW, boxH);
+      // Draw Register B box
+      drawRegBox(aluCtx, regBx, regY, 'REG B', cpu.B, '#00C8FF', boxW, boxH);
+      // Draw ALU diamond
+      drawALUShape(aluCtx, cx, aluY, aluHalfH * 1.9, aluHalfH, cpu.IR);
+      // Draw Result
+      drawRegBox(aluCtx, cx, outY, 'RESULT', cpu.R, '#FFAA00', boxW, boxH);
+    }
+
+    function drawRegBox(ctx, x, y, label, val, color, w = 80, h = 44) {
+      ctx.save();
+      // Glow
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 16;
+      // Box
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.fillStyle = 'rgba(9,11,16,0.9)';
+      roundRect(ctx, x - w / 2, y - h / 2, w, h, 6);
+      ctx.fill(); ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Label
+      const labelSize = Math.max(8, Math.min(9.5, h * 0.2));
+      ctx.fillStyle = color;
+      ctx.font = `700 ${labelSize}px Orbitron, monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(label, x, y - h * 0.16);
+      // Value
+      const valSize = Math.max(9, Math.min(11.5, h * 0.24));
+      ctx.fillStyle = '#fff';
+      ctx.font = `${valSize}px Share Tech Mono, monospace`;
+      ctx.fillText(
+        `${val.toString(16).toUpperCase().padStart(2, '0')}h  ${val}`,
+        x, y + h * 0.16
+      );
+      // Binary
+      const binSize = Math.max(7, Math.min(8.5, h * 0.18));
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.7;
+      ctx.font = `${binSize}px Share Tech Mono, monospace`;
+      ctx.fillText(val.toString(2).padStart(8, '0'), x, y + h * 0.42);
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
+    function drawALUShape(ctx, cx, cy, w, h, op) {
+      ctx.save();
+      ctx.shadowColor = '#00C8FF';
+      ctx.shadowBlur = 24;
+      ctx.strokeStyle = '#00C8FF';
+      ctx.lineWidth = 1.5;
+      ctx.fillStyle = 'rgba(0,30,50,0.9)';
+      // Pentagon-ish ALU shape
+      ctx.beginPath();
+      ctx.moveTo(cx - w, cy - h * 0.3);
+      ctx.lineTo(cx - w * 0.5, cy - h * 0.6);
+      ctx.lineTo(cx + w * 0.5, cy - h * 0.6);
+      ctx.lineTo(cx + w, cy - h * 0.3);
+      ctx.lineTo(cx + w, cy + h * 0.3);
+      ctx.lineTo(cx + w * 0.4, cy + h * 0.5);
+      ctx.lineTo(cx, cy + h * 0.7);
+      ctx.lineTo(cx - w * 0.4, cy + h * 0.5);
+      ctx.lineTo(cx - w, cy + h * 0.3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      // ALU label
+      ctx.fillStyle = '#00C8FF';
+      ctx.font = '700 10px Orbitron, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('ALU', cx, cy - h * 0.15);
+      ctx.fillStyle = '#fff';
+      ctx.font = '9px Share Tech Mono, monospace';
+      ctx.fillText(op || 'IDLE', cx, cy + h * 0.05);
+      // Flags display inside ALU
+      const f = cpu.flags;
+      const flagStr = `Z:${f.Z} C:${f.C} S:${f.S} V:${f.V}`;
+      ctx.fillStyle = 'rgba(0,200,255,0.6)';
+      ctx.font = '7.5px Share Tech Mono, monospace';
+      ctx.fillText(flagStr, cx, cy + h * 0.28);
+      ctx.restore();
+    }
+
+    function drawWire(ctx, x1, y1, x2, y2, color, alpha = 1) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      ctx.quadraticCurveTo(x1, my, x2, y2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    let bitFlowOffset = 0;
+    function drawBitFlow(ctx, x1, y1, x2, y2, val, color) {
+      if (val === 0) return;
+      const steps = 5;
+      for (let s = 0; s < steps; s++) {
+        const t = ((bitFlowOffset * 0.02 + s / steps) % 1);
+        // Quadratic bezier evaluation
+        const mx = x1, my = (y1 + y2) / 2;
+        const bx = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * mx + t * t * x2;
+        const by = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * my + t * t * y2;
+        const bit = (val >> (7 - Math.floor(s * 8 / steps))) & 1;
+        ctx.save();
+        ctx.fillStyle = bit ? color : 'rgba(255,255,255,0.2)';
+        ctx.shadowColor = color;
+        ctx.shadowBlur = bit ? 8 : 0;
+        ctx.beginPath();
+        ctx.arc(bx, by, bit ? 3 : 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PARTICLE SYSTEM
+    // ═══════════════════════════════════════════════════════════
+    let pCanvas, pCtx, particles = [];
+
+    function initParticles() {
+      pCanvas = document.getElementById('particle-canvas');
+      const parent = pCanvas.parentElement;
+      pCanvas.width = parent.offsetWidth;
+      pCanvas.height = parent.offsetHeight;
+      pCtx = pCanvas.getContext('2d');
+      new ResizeObserver(() => {
+        pCanvas.width = parent.offsetWidth;
+        pCanvas.height = parent.offsetHeight;
+      }).observe(parent);
+    }
+
+    function spawnParticles(reg) {
+      const colors = { A: '#00FF9C', B: '#00C8FF', R: '#FFAA00' };
+      const color = colors[reg] || '#00FF9C';
+      for (let i = 0; i < 12; i++) {
+        particles.push({
+          x: pCanvas.width * (reg === 'B' ? 0.75 : 0.25),
+          y: pCanvas.height * 0.15,
+          vx: (Math.random() - 0.5) * 3,
+          vy: Math.random() * 2 + 0.5,
+          life: 1,
+          color, size: Math.random() * 3 + 1,
+        });
+      }
+    }
+
+    function spawnOpParticles() {
+      const cx = pCanvas.width / 2, cy = pCanvas.height / 2;
+      for (let i = 0; i < 30; i++) {
+        const angle = (i / 30) * Math.PI * 2;
+        const speed = Math.random() * 4 + 1;
+        particles.push({
+          x: cx, y: cy,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1,
+          color: ['#00FF9C', '#00C8FF', '#FFAA00', '#FF006E'][Math.floor(Math.random() * 4)],
+          size: Math.random() * 2 + 1,
+        });
+      }
+    }
+
+    function updateParticles() {
+      particles = particles.filter(p => p.life > 0.01);
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.05;
+        p.life -= 0.025;
+        p.vx *= 0.98;
+      });
+    }
+
+    function drawParticles() {
+      if (!pCtx) return;
+      pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+      particles.forEach(p => {
+        pCtx.save();
+        pCtx.globalAlpha = p.life;
+        pCtx.fillStyle = p.color;
+        pCtx.shadowColor = p.color;
+        pCtx.shadowBlur = 6;
+        pCtx.beginPath();
+        pCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        pCtx.fill();
+        pCtx.restore();
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // ANIMATION LOOP
+    // ═══════════════════════════════════════════════════════════
+    function animLoop() {
+      bitFlowOffset++;
+      drawALU();
+      updateParticles();
+      drawParticles();
+      requestAnimationFrame(animLoop);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // KEYBOARD SHORTCUTS
+    // ═══════════════════════════════════════════════════════════
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+      if (e.key === 'a') doOp('ADD');
+      if (e.key === 's') doOp('SUB');
+      if (e.key === 'n') doOp('NOT');
+      if (e.key === 'x') doOp('XOR');
+      if (e.key === 'ArrowLeft') doOp('SHL');
+      if (e.key === 'ArrowRight') doOp('SHR');
+      if (e.key === 'r') doOp('ROL');
+      if (e.key === 'Enter' && e.ctrlKey) runProgram();
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // START
+    // ═══════════════════════════════════════════════════════════
+    window.onload = init;
+  </script>
+</body>
+
+</html>
